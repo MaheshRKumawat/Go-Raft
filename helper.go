@@ -4,8 +4,6 @@
 package raft
 
 import (
-	"net"
-	"net/rpc"
 	"sync"
 	"time"
 )
@@ -36,24 +34,6 @@ type ConsensusModule struct {
 	// volatile state on all servers
 	state              CMState   // state of this CM (Follower, Candidate, Leader, Dead, Shutdown)
 	electionResetEvent time.Time // used to reset election timer
-}
-
-// Server is the RPC end point that receives RPCs from peers.
-type Server struct {
-	mu       sync.Mutex
-	serverId int
-	peerIds  []int
-	cm       *ConsensusModule
-
-	rpcProxy  *RPCProxy     // proxy to send RPCs to peers
-	rpcServer *rpc.Server   // RPC server to receive RPCs from peers
-	listener  *net.Listener // listener to accept RPC connections from peers
-
-	peerClients map[int]*rpc.Client // RPC clients to send RPCs to peers
-
-	wg    sync.WaitGroup
-	ready <-chan interface{}
-	quit  chan interface{}
 }
 
 // LogEntry is a single entry in the log.

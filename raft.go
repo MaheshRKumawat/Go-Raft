@@ -49,8 +49,8 @@ func (cm *ConsensusModule) startElection() {
 			var reply RequestVoteReply
 
 			cm.dlog("Sending RequestVote to %d: %+v", peerId, args)
-			ok := 0
-			if ok == 0 {
+			ok := cm.server.Call(peerId, "ConsensusModule.RequestVote", args, &reply)
+			if ok == nil {
 				cm.mu.Lock()
 				defer cm.mu.Unlock()
 				cm.dlog("Received RequestVoteReply %+v", reply)
@@ -217,8 +217,8 @@ func (cm *ConsensusModule) leaderSendHeartbeats() {
 		go func(peerId int) {
 			cm.dlog("Sending AppendEntries to Peer %v: ni=%d, args=%+v", peerId, 0, args)
 			var reply AppendEntriesReply
-			ok := 0
-			if ok == 0 {
+			ok := cm.server.Call(peerId, "ConsensusModule.AppendEntries", args, &reply)
+			if ok == nil {
 				cm.mu.Lock()
 				defer cm.mu.Unlock()
 				if reply.Term > savedCurrentTerm {
