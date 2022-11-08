@@ -51,6 +51,32 @@ func NewCluster(t *testing.T, n int) *Cluster {
 	}
 }
 
+func (c *Cluster) DisconnectPeer(id int) {
+	tlog("Disconnect %d", id)
+	c.cluster[id].DisconnectAll()
+	for j := 0; j < c.n; j++ {
+		if j != id {
+			c.cluster[j].DisconnectPeer(id)
+		}
+	}
+	c.connected[id] = false
+}
+
+func (c *Cluster) ReconnectPeer(id int) {
+	tlog("Reconnect %d", id)
+	for j := 0; j < c.n; j++ {
+		if j != id {
+			if err := c.cluster[id].ConnectToPeer(j, c.cluster[j].GetListenAddr()); err != nil {
+				c.t.Fatal(err)
+			}
+			if err := c.cluster[j].ConnectToPeer(id, c.cluster[id].GetListenAddr()); err != nil {
+				c.t.Fatal(err)
+			}
+		}
+	}
+	c.connected[id] = true
+}
+
 func (c *Cluster) Shutdown() {
 	for i := 0; i < c.n; i++ {
 		c.cluster[i].DisconnectAll()
@@ -104,3 +130,11 @@ func init() {
 	rand.Seed(time.Now().UnixNano())
 }
 
+func tlog(format string, a ...interface{}) {
+	format = "[TEST] " + format
+	log.Printf(format, a...)
+}
+
+func sleepMs(n int) {
+	time.Sleep(time.Duration(n) * time.Millisecond)
+}
