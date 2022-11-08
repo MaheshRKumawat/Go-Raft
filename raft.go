@@ -67,7 +67,7 @@ func (cm *ConsensusModule) startElection() {
 				} else if reply.Term == savedCurrentTerm {
 					if reply.VoteGranted {
 						votesReceived += 1
-						if votesReceived > ((len(cm.peerIds)+1)/2) {
+						if votesReceived > ((len(cm.peerIds) + 1) / 2) {
 							// Won the election!
 							cm.dlog("Wins Election with %d votes", votesReceived)
 							cm.becomeLeader()
@@ -159,13 +159,6 @@ func (cm *ConsensusModule) runElectionTimer() {
 			return
 		}
 		cm.mu.Unlock()
-	}
-}
-
-func (cm *ConsensusModule) dlog(format string, args ...interface{}) {
-	if DebugCM > 0 {
-		format = fmt.Sprintf("[%d] ", cm.id) + format
-		log.Printf(format, args...)
 	}
 }
 
@@ -263,7 +256,12 @@ func (cm *ConsensusModule) becomeFollower(term int) {
 	go cm.runElectionTimer()
 }
 
-
+func (cm *ConsensusModule) dlog(format string, args ...interface{}) {
+	if DebugCM > 0 {
+		format = fmt.Sprintf("[%d] ", cm.id) + format
+		log.Printf(format, args...)
+	}
+}
 
 // reports the state of this CM.
 func (cm *ConsensusModule) Report() (id int, term int, isLeader bool) {
