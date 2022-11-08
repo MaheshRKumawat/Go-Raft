@@ -62,7 +62,7 @@ func (cm *ConsensusModule) startElection() {
 
 				if reply.Term > savedCurrentTerm {
 					cm.dlog("Term out of date in RequestVoteReply")
-					// cm becomes follower
+					cm.becomeFollower(reply.Term)
 					return
 				} else if reply.Term == savedCurrentTerm {
 					if reply.VoteGranted {
@@ -70,7 +70,7 @@ func (cm *ConsensusModule) startElection() {
 						if votesReceived > ((len(cm.peerIds)+1)/2) {
 							// Won the election!
 							cm.dlog("Wins Election with %d votes", votesReceived)
-							// cm becomes leader
+							cm.becomeLeader()
 							return
 						}
 					}
@@ -94,7 +94,7 @@ func (cm *ConsensusModule) RequestVote(args RequestVoteArgs, reply *RequestVoteR
 
 	if args.Term > cm.currentTerm {
 		cm.dlog("Term out of date in RequestVote")
-		// cm becomes follower
+		cm.becomeFollower(args.Term)
 	}
 
 	if cm.currentTerm == args.Term &&
@@ -167,4 +167,115 @@ func (cm *ConsensusModule) dlog(format string, args ...interface{}) {
 		format = fmt.Sprintf("[%d] ", cm.id) + format
 		log.Printf(format, args...)
 	}
+}
+
+// Append Entries only sent by a Leader in a praticular term to every follower
+func (cm *ConsensusModule) AppendEntries(args AppendEntriesArgs, reply *AppendEntriesReply) error {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	if cm.state == Dead {
+		return nil
+	}
+	cm.dlog("AppendEntries= %+v", args)
+
+	if args.Term > cm.currentTerm {
+		cm.dlog("Term out of date in AppendEntries")
+		cm.becomeFollower(args.Term)
+	}
+
+	reply.Success = false
+	if args.Term == cm.currentTerm {
+		if cm.state != Follower {
+			cm.becomeFollower(args.Term)
+		}
+		cm.electionResetEvent = time.Now()
+		reply.Success = true
+	}
+
+	reply.Term = cm.currentTerm
+	cm.dlog("AppendEntries reply= %+v", *reply)
+	return nil
+}
+
+// Only leader sends heartbeats to followers.
+// Heartbeats are sent periodically, and also when a leader first comes to power,
+// Each heartbeats are empty append entries except containing current term and leader id.
+func (cm *ConsensusModule) leaderSendHeartbeats() {
+	cm.mu.Lock()
+	if cm.state != Leader {
+		cm.mu.Unlock()
+		return
+	}
+	savedCurrentTerm := cm.currentTerm
+	cm.mu.Unlock()
+
+	for _, peerId := range cm.peerIds {
+		args := AppendEntriesArgs{
+			Term:     savedCurrentTerm,
+			LeaderId: cm.id,
+		}
+		go func(peerId int) {
+			cm.dlog("Sending AppendEntries to Peer %v: ni=%d, args=%+v", peerId, 0, args)
+			var reply AppendEntriesReply
+			ok := 0
+			if ok == 0 {
+				cm.mu.Lock()
+				defer cm.mu.Unlock()
+				if reply.Term > savedCurrentTerm {
+					cm.dlog("term out of date in heartbeat reply")
+					cm.becomeFollower(reply.Term)
+					return
+				}
+			}
+		}(peerId)
+	}
+}
+
+func (cm *ConsensusModule) becomeLeader() {
+	cm.state = Leader
+	cm.dlog("Becomes Leader with Term=%d, Log=%v", cm.currentTerm, cm.log)
+
+	go func() {
+		ticker := time.NewTicker(50 * time.Millisecond)
+		defer ticker.Stop()
+
+		// Send periodic heartbeats, as long as still leader.
+		for {
+			cm.leaderSendHeartbeats()
+			<-ticker.C
+
+			cm.mu.Lock()
+			if cm.state != Leader {
+				cm.mu.Unlock()
+				return
+			}
+			cm.mu.Unlock()
+		}
+	}()
+}
+
+func (cm *ConsensusModule) becomeFollower(term int) {
+	cm.dlog("Becomes Follower with Term=%d; Log=%v", term, cm.log)
+	cm.state = Follower
+	cm.currentTerm = term
+	cm.votedFor = -1
+	cm.electionResetEvent = time.Now()
+	go cm.runElectionTimer()
+}
+
+
+
+// reports the state of this CM.
+func (cm *ConsensusModule) Report() (id int, term int, isLeader bool) {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	return cm.id, cm.currentTerm, cm.state == Leader
+}
+
+// When a node is unreachable or crashed it is considered dead
+func (cm *ConsensusModule) Stop() {
+	cm.mu.Lock()
+	defer cm.mu.Unlock()
+	cm.state = Dead
+	cm.dlog("Becomes Dead")
 }
