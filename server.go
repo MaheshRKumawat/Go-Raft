@@ -7,27 +7,8 @@ import (
 	"net"
 	"net/rpc"
 	"os"
-	"sync"
 	"time"
 )
-
-// Server is the RPC end point that receives RPCs from peers.
-type Server struct {
-	mu       sync.Mutex
-	serverId int
-	peerIds  []int
-	cm       *ConsensusModule
-
-	rpcProxy  *RPCProxy    // proxy to send RPCs to peers
-	rpcServer *rpc.Server  // RPC server to receive RPCs from peers
-	listener  net.Listener // listener to accept RPC connections from peers
-
-	peerClients map[int]*rpc.Client // RPC clients to send RPCs to peers
-
-	wg    sync.WaitGroup
-	ready <-chan interface{}
-	quit  chan interface{}
-}
 
 func NewServer(serverId int, peerIds []int, ready <-chan interface{}) *Server {
 	s := new(Server)
