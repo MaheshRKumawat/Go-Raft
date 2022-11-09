@@ -120,28 +120,3 @@ func Test_6(t *testing.T) {
 		t.Errorf("newTerm=%d, origTerm=%d", newTerm, origTerm)
 	}
 }
-
-// During election disconnect loop
-func Test_7(t *testing.T) {
-	defer leaktest.CheckTimeout(t, 100*time.Millisecond)()
-
-	cluster := NewCluster(t, n)
-	defer cluster.Shutdown()
-
-	for cycle := 0; cycle < 5; cycle++ {
-		leaderId, _ := cluster.CheckOneLeader()
-
-		cluster.DisconnectPeer(leaderId)
-		otherId := (leaderId + 1) % n
-		cluster.DisconnectPeer(otherId)
-		sleepMs(310)
-		cluster.CheckNoLeader()
-
-		// Reconnect both.
-		cluster.ReconnectPeer(otherId)
-		cluster.ReconnectPeer(leaderId)
-
-		// Give it time to settle
-		sleepMs(150)
-	}
-}
